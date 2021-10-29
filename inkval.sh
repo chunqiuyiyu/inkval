@@ -1,6 +1,6 @@
 #!/bin/bash
 
-start=$(date +%s000)
+start=$(date +%s)
 
 rm -rf dist
 mkdir dist
@@ -29,6 +29,6 @@ done
 
 rm tmp
 
-end=$(date +%s000)
-elapsed=$(bc <<<"$end-$start")
+end=$(date +%s)
+elapsed=$("$end-$start")
 echo $elapsed
