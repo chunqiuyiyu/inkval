@@ -1,4 +1,4 @@
-#!/bin/bash bash
+#!/bin/bash
 
 start=`date +%s`
 
