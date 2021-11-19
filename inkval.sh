@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 start=`date +%s`
 
 rm -rf dist
