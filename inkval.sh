@@ -2,118 +2,302 @@
 
 set -e
 
+echo 'Start...'
 start=$(date +%s.%N)
 
-rm -rf dist
-mkdir dist
+# constants
+CONTENT_PATH=$(realpath content)
+readonly CONTENT_PATH
+TMP_PATH=$(realpath tmp)
+readonly TMP_PATH
+DIST_PATH=$(realpath dist)
+readonly DIST_PATH
+readonly INDEX_PATH=$CONTENT_PATH/index.md
+BASE_PATH=$(pwd)
+readonly BASE_PATH
 
-rm -rf tmp
-mkdir tmp
+# Prepare dist and tmp dir
+set_env() {
+  rm -rf dist
+  mkdir dist
 
-files=$(find content -name "*.md")
-total=$(echo "$files" | wc -l)
-columns=$(tput cols)
+  rm -rf tmp
+  mkdir tmp
+}
 
-file_index=0
-echo 'Start deal...'
+# Output new blank line
+br() {
+  printf '\n'
+}
 
-spin='-\|/'
+# Remove prefix and suffix of given string
+thin() {
+  local input=$1
+  local prefix=$2
+  local suffix=$3
 
-for file in $files; do
-  file_index=$((file_index + 1))
-  {
-    file_base=$(basename "$file" .md)
-    html_file=$(dirname "$file" | sed 's/^content/dist/g')/${file_base}.html
-    html_dir=$(dirname "$html_file")
-    [ ! -d "$html_dir" ] && mkdir -p "$html_dir"
+  local result=${input#*"$prefix"}
+  result=${result%"$suffix"*}
+  echo "$result"
+}
 
-    created=$(sed -n /^date:/p "$file")
-    title=$(sed -n /^title:/p "$file")
+# Get value from metadata block
+meta_grep() {
+  local val
+  local file=$1
+  local key=$2
+  local key_len=${#key}
+  local cut_index=$((key_len + 3))
+  val=$(sed -n /^"$key":/p "$file" | cut -c"$cut_index"-)
+  echo "$val" | tr -d '\r'
+}
 
-    tags=$(sed -n /^tags:/p "$file")
+# Read config from content/index.md
+get_config() {
+  lang=$(meta_grep "$INDEX_PATH" lang)
+  desc=$(meta_grep "$INDEX_PATH" description)
+  name=$(meta_grep "$INDEX_PATH" title)
+  link=$(meta_grep "$INDEX_PATH" link)
+  pagination=$(meta_grep "$INDEX_PATH" pagination)
+}
 
-    if [[ -n $title ]] && [[ -n $created ]]; then
-      pandoc -s --template=layout.html --metadata=title:"$file_base" "$file" >"$html_file"
-      relative_path=$(echo "$html_file" | sed 's/^dist\///g')
-      archive+="* <time>${created:5:10}</time>[${title:5}]($relative_path)"
-      [ ! -d "tmp/archive" ] && mkdir -p tmp/archive
-      echo -e "$archive" >>tmp/archive/index
+# Generate feed.xml
+gen_rss() {
+  printf "Creating RSS file..."
 
-      if [[ -n $tags ]]; then
-        new=${tags:5}
-        t=${new# [*}
-        t=${t%]*}
-        IFS=', ' read -r -a a <<<"$t"
-        archive_tag+="* <time>${created:5:10}</time>[${title:5}](../$relative_path)"
-        for item in "${a[@]}"; do
-          tag_dir=tmp/tags
-          [ ! -d "$tag_dir" ] && mkdir -p "$tag_dir"
-          echo -e "$archive_tag" >>"$tag_dir"/"$item".md
-        done
+  local rss
+  local line
+  local title
+  local date
+  local link
+
+  rss="$(
+    cat <<-EOF
+<rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title>$name</title>
+        <description>$desc</description>
+        <language>$lang</language>
+        <link>$link</link>
+        <atom:link href="$link/feed.xml" rel="self" type="application/rss+xml"/>
+EOF
+  )"
+
+  rss+="\n"
+  while IFS= read -r line; do
+    title=$(thin "$line" "[" "]")
+
+    date=$(thin "$line" "<time>" "</time>")
+    date=$(date --date="$date" -R)
+
+    link=$(thin "$line" "(" ")")
+
+    rss+="$(
+      cat <<-EOF
+    <item>
+        <title>$title</title>
+        <pubDate>$date</pubDate>
+        <link>$link</link>
+        <guid>$link</guid>
+        <description/>
+    </item>
+EOF
+    )"
+    rss+="\n"
+  done <"$TMP_PATH"/archive/tmp_archive.md
+  rss+="    </channel>\n</rss>"
+  echo -e "$rss" >"$DIST_PATH"/feed.xml
+
+  printf "\e[32mOK\e[0m"
+  br
+}
+
+gen_archive() {
+  printf "Creating Archive..."
+
+  sort -r tmp/archive/index >tmp/archive/tmp_archive.md
+  cd tmp/archive
+  mkdir indexes
+  cd indexes
+  split --numeric-suffixes=1 --additional-suffix=.md -l "$pagination" ../tmp_archive.md
+  cd ..
+
+  local archives
+  local archive_base
+  local current_index
+  local next
+  local prev
+  local html_name
+
+  archives=$(find indexes -name "*.md")
+  for archive in $archives; do
+    {
+      archive_base=$(basename "$archive" .md)
+      current_index=10#${archive_base:1}
+
+      next=$(printf "%02d" $((current_index + 1)))
+      prev=$(printf "%02d" $((current_index - 1)))
+
+      html_name=inde"$archive_base"
+      if [ "$archive_base" = "x01" ]; then
+        html_name=index
       fi
-    fi
-  } &
 
-  i=$(((i + 1) % 4))
-  printf "\r%-${columns}s" ""
-  printf "\r(${file_index}/${total})${spin:$i:1} %s""$file"
-done
+      echo -e '\n' >>"$archive"
+      if [ -e "indexes/x$prev.md" ]; then
+        if [ "$archive_base" = "x02" ]; then
+          prev=''
+        fi
 
-wait
-
-tags=$(find tmp/tags -name "*.md")
-[ ! -d "dist/tags" ] && mkdir -p dist/tags
-for tag in $tags; do
-  {
-    base=$(basename "$tag" .md)
-    sort -r "$tag" >tmp/tmp_"$base".md
-    pandoc -s --from gfm --to html --metadata title="$base" tmp/tmp_"$base".md >dist/tags/"$base".html
-  } &
-done
-
-wait
-
-sort -r tmp/archive/index >tmp/archive/tmp_archive.md
-cd tmp/archive
-mkdir indexes
-cd indexes
-split --numeric-suffixes=1 --additional-suffix=.md -l 60 ../tmp_archive.md
-cd ..
-
-archives=$(find indexes -name "*.md")
-for archive in $archives; do
-  {
-    archive_base=$(basename "$archive" .md)
-    current_index=10#${archive_base:1}
-
-    next=$(printf "%02d" $((current_index + 1)))
-    prev=$(printf "%02d" $((current_index - 1)))
-
-    html_name=inde"$archive_base"
-    if [ "$archive_base" = "x01" ]; then
-      html_name=index
-    fi
-
-    echo -e '\n' >>"$archive"
-    if [ -e "indexes/x$prev.md" ]; then
-      if [ "$archive_base" = "x02" ]; then
-        prev=''
+        echo "[<< Newer](index$prev.html)" >>"$archive"
+      fi
+      if [ -e "indexes/x$next.md" ]; then
+        echo "[Older >>](index$next.html)" >>"$archive"
       fi
 
-      echo "[<< Prev](index$prev.html)" >>"$archive"
-    fi
-    if [ -e "indexes/x$next.md" ]; then
-      echo "[Next >>](index$next.html)" >>"$archive"
-    fi
+      cat "$INDEX_PATH" "$archive" >tmp.md
+      render tmp.md ../../dist/"$html_name".html
+    }
+  done
 
-    pandoc -s --from gfm --to html "$archive"  >../../dist/"$html_name".html
-  } &
-done
+  wait
+  printf "\e[32mOK\e[0m"
+  br
+}
 
-wait
+gen_tags() {
+  printf "Creating Tags..."
+
+  local tags
+  local base
+  local tag_slug
+  local html_name
+
+  cd "$BASE_PATH"
+  tags=$(find tmp/tags -name "*.md")
+  [ ! -d "dist/tags" ] && mkdir -p dist/tags
+  touch tmp/tags/index.md
+  for tag in $tags; do
+    {
+      base=$(basename "$tag" .md)
+      sort -r "$tag" >tmp/tmp_"$base".md
+      html_name=$base
+      tag_slug=$(meta_grep "$INDEX_PATH" "$base")
+      [[ -n $tag_slug  ]] && html_name=$tag_slug
+      echo "$tag_slug"
+      render tmp/tmp_"$base".md dist/tags/"$html_name".html "$base"
+      echo -e "[$base](tags/$base.html)" >>tmp/tags/index.md
+    } &
+
+    render tmp/tags/index.md dist/tags/index.html "Tags"
+  done
+
+  wait
+  printf "\e[32mOK\e[0m"
+  br
+}
+
+# Generate default template of layout
+gen_layout() {
+  [ ! -d layout ] && mkdir -p layout
+  local repo="https://github.com/chunqiuyiyu/inkval"
+  echo "<footer><div>©$(date +"%Y") built with <a href=\"$repo\">Inkval</a></div></footer>" >layout/footer.html
+}
+
+# Use pandoc to render html files from markdown file
+layout_path=$(realpath layout)
+render() {
+  local input=$1
+  local output=$2
+  local title=$3
+
+  local base_options="-s --from gfm --to html --template=$layout_path/template.html"
+  base_options+=" --include-before-body=$layout_path/header.html --include-after-body=$layout_path/footer.html"
+
+  [[ -n $title ]] && base_options+=" --metadata title=$title"
+  [[ -n $desc ]] && base_options+=" --metadata description=$desc"
+  [[ -n $lang ]] && base_options+=" -V lang=$lang"
+
+  eval pandoc "$base_options" "$input" >"$output"
+}
+
+# Main loop to collect post info
+main() {
+  local files
+  local total
+  local columns
+  files=$(find content -name "*.md")
+  total=$(echo "$files" | wc -l)
+  columns=$(tput cols)
+
+  local file_index
+  local spin
+  file_index=0
+  spin='-\|/'
+
+  local file_base
+  local html_file
+  local html_dir
+  local title
+  local created
+  local tags
+  local relative_path
+  local tmp
+  local spin_index
+  spin_index=0
+
+  for file in $files; do
+    file_index=$((file_index + 1))
+    {
+      file_base=$(basename "$file" .md)
+      html_file=$(dirname "$file" | sed 's/^content/dist/g')/${file_base}.html
+      html_dir=$(dirname "$html_file")
+      [ ! -d "$html_dir" ] && mkdir -p "$html_dir"
+
+      title=$(meta_grep "$file" title)
+      created=$(meta_grep "$file" date)
+      tags=$(meta_grep "$file" tags)
+
+      if [[ -n $title ]]; then
+        render "$file" "$html_file"
+        relative_path=$(echo "$html_file" | sed 's/^dist\///g')
+
+        if [[ -n $created ]]; then
+          archive+="* <time>$created</time> --- [$title]($link/$relative_path)"
+          [ ! -d "tmp/archive" ] && mkdir -p tmp/archive
+          echo -e "$archive" >>tmp/archive/index
+
+          if [[ -n $tags ]]; then
+            tmp=$(thin "$tags" "[" "]")
+            IFS=', ' read -r -a tmp <<<"$tmp"
+            for item in "${tmp[@]}"; do
+              [ ! -d tmp/tags ] && mkdir -p tmp/tags
+              echo -e "$archive" >>tmp/tags/"$item".md
+            done
+          fi
+        fi
+      fi
+    } &
+
+    spin_index=$(((spin_index + 1) % 4))
+    printf "\r%-${columns}s" ""
+    printf "\r(${file_index}/${total}) ${spin:$spin_index:1} %s""$file..."
+  done
+
+  printf "\e[32mOK\e[0m"
+  br
+  wait
+}
+
+set_env
+get_config
+gen_layout
+main
+gen_archive
+gen_tags
+gen_rss
 
 end=$(date +%s.%N)
 runtime=$(echo "scale=2; ($end - $start)/1" | bc -l)
 
-printf '\n'
 echo "Done in $runtime s"
