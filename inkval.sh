@@ -46,10 +46,14 @@ meta_grep() {
   local val
   local file=$1
   local key=$2
-  local key_len=${#key}
-  local cut_index=$((key_len + 3))
-  val=$(sed -n /^"$key":/p "$file" | cut -c"$cut_index"-)
-  echo "$val" | tr -d '\r'
+  local key_len
+
+  if [[ -e $file ]]; then
+    key_len=$(echo -n "$key" | wc -c)
+    local cut_index=$((key_len + 3))
+    val=$(sed -n /^"$key":/p "$file" | cut -c"$cut_index"-)
+    echo "$val" | tr -d '\r'
+  fi
 }
 
 # Read config from content/index.md
@@ -165,6 +169,34 @@ gen_archive() {
   br
 }
 
+iterate_tags() {
+  local tmp
+  if [[ -n $1 ]]; then
+    tmp=$(thin "$1" "[" "]")
+    IFS=', ' read -r -a tmp <<<"$tmp"
+    for item in "${tmp[@]}"; do
+      eval "$2" "$item" "$3"
+    done
+  fi
+}
+
+insert_tag_slugs() {
+  if [[ -e $2 ]]; then
+    local tag_slugs
+    tag_slugs=$(meta_grep "$INDEX_PATH" "$1")
+    if [[ -n $tag_slugs ]]; then
+      echo -e "  - name: $1\n    slug: $tag_slugs" >>"$2"
+    else
+      echo -e "  - name: $1\n    slug: $1" >>"$2"
+    fi
+  fi
+}
+
+gen_tmp_tag() {
+  [ ! -d tmp/tags ] && mkdir -p "$TMP_PATH"/tags
+  echo -e "$archive" >>"$TMP_PATH"/tags/"$item".md
+}
+
 gen_tags() {
   printf "Creating Tags..."
 
@@ -183,16 +215,14 @@ gen_tags() {
       sort -r "$tag" >tmp/tmp_"$base".md
       html_name=$base
       tag_slug=$(meta_grep "$INDEX_PATH" "$base")
-      [[ -n $tag_slug  ]] && html_name=$tag_slug
-      echo "$tag_slug"
+      [[ -n $tag_slug ]] && html_name=$tag_slug
       render tmp/tmp_"$base".md dist/tags/"$html_name".html "$base"
-      echo -e "[$base](tags/$base.html)" >>tmp/tags/index.md
+      echo -e "[$base]($link/tags/$html_name.html)" >>tmp/tags/index.md
     } &
-
-    render tmp/tags/index.md dist/tags/index.html "Tags"
   done
 
   wait
+  render tmp/tags/index.md dist/tags/index.html "Tags"
   printf "\e[32mOK\e[0m"
   br
 }
@@ -210,13 +240,15 @@ render() {
   local input=$1
   local output=$2
   local title=$3
+  local others=$4
 
-  local base_options="-s --from gfm --to html --template=$layout_path/template.html"
+  local base_options="-s --from gfm --to html --template=$layout_path/template.html --metadata link=$link"
   base_options+=" --include-before-body=$layout_path/header.html --include-after-body=$layout_path/footer.html"
 
   [[ -n $title ]] && base_options+=" --metadata title=$title"
   [[ -n $desc ]] && base_options+=" --metadata description=$desc"
   [[ -n $lang ]] && base_options+=" -V lang=$lang"
+  [[ -e $others ]] && base_options+=" -d \"$others\""
 
   eval pandoc "$base_options" "$input" >"$output"
 }
@@ -226,7 +258,7 @@ main() {
   local files
   local total
   local columns
-  files=$(find content -name "*.md")
+  files=$(find "$CONTENT_PATH" -name "*.md")
   total=$(echo "$files" | wc -l)
   columns=$(tput cols)
 
@@ -241,8 +273,8 @@ main() {
   local title
   local created
   local tags
+  local path
   local relative_path
-  local tmp
   local spin_index
   spin_index=0
 
@@ -250,7 +282,7 @@ main() {
     file_index=$((file_index + 1))
     {
       file_base=$(basename "$file" .md)
-      html_file=$(dirname "$file" | sed 's/^content/dist/g')/${file_base}.html
+      html_file=$(dirname "$file" | sed 's/^.*content/dist/g')/${file_base}.html
       html_dir=$(dirname "$html_file")
       [ ! -d "$html_dir" ] && mkdir -p "$html_dir"
 
@@ -259,7 +291,14 @@ main() {
       tags=$(meta_grep "$file" tags)
 
       if [[ -n $title ]]; then
-        render "$file" "$html_file"
+        if [[ -n $tags ]]; then
+          path=$TMP_PATH/"$file_base"_tags_map.yml
+          touch path
+          echo -e "variables:\n tag_slugs:" >"$path"
+          iterate_tags "$tags" insert_tag_slugs "$path"
+        fi
+
+        render "$file" "$html_file" "\"$title\"" "$TMP_PATH"/"$file_base"_tags_map.yml
         relative_path=$(echo "$html_file" | sed 's/^dist\///g')
 
         if [[ -n $created ]]; then
@@ -267,14 +306,7 @@ main() {
           [ ! -d "tmp/archive" ] && mkdir -p tmp/archive
           echo -e "$archive" >>tmp/archive/index
 
-          if [[ -n $tags ]]; then
-            tmp=$(thin "$tags" "[" "]")
-            IFS=', ' read -r -a tmp <<<"$tmp"
-            for item in "${tmp[@]}"; do
-              [ ! -d tmp/tags ] && mkdir -p tmp/tags
-              echo -e "$archive" >>tmp/tags/"$item".md
-            done
-          fi
+          iterate_tags "$tags" gen_tmp_tag
         fi
       fi
     } &
