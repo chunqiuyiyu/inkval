@@ -6,7 +6,7 @@
 
 ## Features
 
-* Only based on Pandoc ang GNU core utilities
+* Only based on [Pandoc](https://pandoc.org/index.html) ang GNU core utilities
 * Easy to use and expand functions
 * Pagination support
 * RSS support
