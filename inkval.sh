@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 
-set -e
+set -o nounset
+set -o errexit
+set -o pipefail
+IFS=$'\n\t'
 
 echo 'Start...'
 start=$(date +%s.%N)
 
 # constants
-CONTENT_PATH=$(realpath content)
+CONTENT_PATH=$(realpath site/content)
 readonly CONTENT_PATH
 TMP_PATH=$(realpath tmp)
 readonly TMP_PATH
@@ -15,6 +18,8 @@ readonly DIST_PATH
 readonly INDEX_PATH=$CONTENT_PATH/index.md
 BASE_PATH=$(pwd)
 readonly BASE_PATH
+LAYOUT_PATH=$(realpath layout)
+readonly LAYOUT_PATH
 
 # Prepare dist and tmp dir
 set_env() {
@@ -52,7 +57,7 @@ meta_grep() {
     key_len=$(echo -n "$key" | wc -c)
     local cut_index=$((key_len + 3))
     val=$(sed -n /^"$key":/p "$file" | cut -c"$cut_index"-)
-    echo "$val" | tr -d '\r'
+    echo "$val" | tr -d '\r' | cut -d$'\n' -f1
   fi
 }
 
@@ -63,10 +68,15 @@ get_config() {
   name=$(meta_grep "$INDEX_PATH" title)
   link=$(meta_grep "$INDEX_PATH" link)
   pagination=$(meta_grep "$INDEX_PATH" pagination)
+  rss=$(meta_grep "$INDEX_PATH" rss)
 }
 
 # Generate feed.xml
 gen_rss() {
+  if [ ! -d "$TMP_PATH"/archive ] || [ "$rss" = false ]; then
+    return 0
+  fi
+
   printf "Creating RSS file..."
 
   local rss
@@ -82,8 +92,8 @@ gen_rss() {
         <title>$name</title>
         <description>$desc</description>
         <language>$lang</language>
-        <link>$link</link>
-        <atom:link href="$link/feed.xml" rel="self" type="application/rss+xml"/>
+        <link>${link-""}</link>
+        <atom:link href="${link-""}/feed.xml" rel="self" type="application/rss+xml"/>
 EOF
   )"
 
@@ -117,6 +127,10 @@ EOF
 }
 
 gen_archive() {
+  if [ ! -d "$TMP_PATH"/archive ]; then
+    return 0
+  fi
+
   printf "Creating Archive..."
 
   sort -r tmp/archive/index >tmp/archive/tmp_archive.md
@@ -175,7 +189,7 @@ iterate_tags() {
     tmp=$(thin "$1" "[" "]")
     IFS=', ' read -r -a tmp <<<"$tmp"
     for item in "${tmp[@]}"; do
-      eval "$2" "$item" "$3"
+      eval "$2" "$item" "${3-""}"
     done
   fi
 }
@@ -198,6 +212,10 @@ gen_tmp_tag() {
 }
 
 gen_tags() {
+  if [ ! -d "$TMP_PATH"/tags ]; then
+    return 0
+  fi
+
   printf "Creating Tags..."
 
   local tags
@@ -229,23 +247,30 @@ gen_tags() {
 
 # Generate default template of layout
 gen_layout() {
-  [ ! -d layout ] && mkdir -p layout
+  if [[ -d $LAYOUT_PATH ]]; then
+    return 0
+  fi
+
+  mkdir -p "$LAYOUT_PATH"
+
+  pandoc -D html >"$LAYOUT_PATH"/template.html
+  echo "" >"$LAYOUT_PATH"/header.html
+
   local repo="https://github.com/chunqiuyiyu/inkval"
   local updated
   updated="<time>$(date)</time>"
-  echo "<footer><div>©$(date +"%Y") built with <a href=\"$repo\">Inkval</a> at $updated</div></footer>" >layout/footer.html
+  echo "<footer><div>©$(date +"%Y") built with <a href=\"$repo\">Inkval</a> at $updated</div></footer>" >"$LAYOUT_PATH"/footer.html
 }
 
 # Use pandoc to render html files from markdown file
-layout_path=$(realpath layout)
 render() {
   local input=$1
   local output=$2
-  local title=$3
-  local others=$4
+  local title=${3-""}
+  local others=${4-""}
 
-  local base_options="-s --from gfm --to html --template=$layout_path/template.html --metadata link=$link"
-  base_options+=" --include-before-body=$layout_path/header.html --include-after-body=$layout_path/footer.html"
+  local base_options="-s --from gfm --to html --template=$LAYOUT_PATH/template.html --metadata link=$link"
+  base_options+=" --include-before-body=$LAYOUT_PATH/header.html --include-after-body=$LAYOUT_PATH/footer.html"
 
   [[ -n $title ]] && base_options+=" --metadata title=$title"
   [[ -n $desc ]] && base_options+=" --metadata description=$desc"
@@ -331,6 +356,7 @@ gen_archive
 gen_tags
 gen_rss
 
+rm -rf "$TMP_PATH"
 end=$(date +%s.%N)
 runtime=$(echo "scale=2; ($end - $start)/1" | bc -l)
 
