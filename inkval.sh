@@ -231,7 +231,9 @@ gen_tags() {
 gen_layout() {
   [ ! -d layout ] && mkdir -p layout
   local repo="https://github.com/chunqiuyiyu/inkval"
-  echo "<footer><div>©$(date +"%Y") built with <a href=\"$repo\">Inkval</a></div></footer>" >layout/footer.html
+  local updated
+  updated="<time>$(date)</time>"
+  echo "<footer><div>©$(date +"%Y") built with <a href=\"$repo\">Inkval</a> at $updated</div></footer>" >layout/footer.html
 }
 
 # Use pandoc to render html files from markdown file
