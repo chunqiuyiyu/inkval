@@ -40,7 +40,7 @@ dist/
 
 </details>
 
-Tusa is built on the top of [Pandoc][2] and [Markdown][3] file system.
+Inkval is built on the top of [Pandoc][2] and [Markdown][3] file system.
 
 Checkout [Docs](/inkval/docs.html) and [Examples](/inkval/examples.html) for more details.
 

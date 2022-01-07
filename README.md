@@ -13,7 +13,12 @@
 * Tag slug support
 * RSS support
 
-For more information, visit [website](https://www.chunqiuyiyu.com/inkval/index.html) and [docs](https://www.chunqiuyiyu.com/inkval/docs.html).
+For more information, visit [website](https://www.chunqiuyiyu.com/inkval/index.html)
+and [docs](https://www.chunqiuyiyu.com/inkval/docs.html).
+
+## Lighthouse Score
+
+![Score](score.png)
 
 ## Usage
 
