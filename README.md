@@ -7,8 +7,10 @@
 ## Features
 
 * Only based on [Pandoc](https://pandoc.org/index.html) ang GNU core utilities
+* Perfect score(100) on [Google lighthouse](https://github.com/GoogleChrome/lighthouse)
 * Easy to use and expand functions
 * Pagination support
+* Tag slug support
 * RSS support
 
 For more information, visit [website](https://www.chunqiuyiyu.com/inkval/index.html) and [docs](https://www.chunqiuyiyu.com/inkval/docs.html).
