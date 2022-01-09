@@ -28,6 +28,9 @@ curl -s https://raw.githubusercontent.com/chunqiuyiyu/inkval/main/inkval.sh | ba
 wget -qO - https://raw.githubusercontent.com/chunqiuyiyu/inkval/main/inkval.sh | bash
 ```
 
+## Tips
+You should use last release Paondoc to avoid bugs and get better experiences.
+
 ## License
 
 MIT
