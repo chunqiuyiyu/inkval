@@ -85,8 +85,7 @@ gen_rss() {
   local date
   local link
 
-  rss="$(
-    cat <<-EOF
+  cat <<-EOF >"$DIST_PATH"/feed.xml
 <rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
     <channel>
         <title>$name</title>
@@ -95,9 +94,6 @@ gen_rss() {
         <link>${link-""}</link>
         <atom:link href="${link-""}/feed.xml" rel="self" type="application/rss+xml"/>
 EOF
-  )"
-
-  rss+="\n"
   while IFS= read -r line; do
     title=$(thin "$line" "[" "]")
 
@@ -106,8 +102,7 @@ EOF
 
     link=$(thin "$line" "(" ")")
 
-    rss+="$(
-      cat <<-EOF
+    cat <<-EOF >>"$DIST_PATH"/feed.xml
     <item>
         <title>$title</title>
         <pubDate>$date</pubDate>
@@ -116,11 +111,8 @@ EOF
         <description/>
     </item>
 EOF
-    )"
-    rss+="\n"
   done <"$TMP_PATH"/archive/tmp_archive.md
-  rss+="    </channel>\n</rss>"
-  echo -e "$rss" >"$DIST_PATH"/feed.xml
+  echo -e "    </channel>\n</rss>" >>"$DIST_PATH"/feed.xml
 
   printf "\e[32mOK\e[0m"
   br
