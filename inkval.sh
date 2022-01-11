@@ -9,7 +9,7 @@ echo 'Start...'
 start=$(date +%s.%N)
 
 # constants
-CONTENT_PATH=$(realpath site/content)
+CONTENT_PATH=$(realpath content)
 readonly CONTENT_PATH
 TMP_PATH=$(realpath tmp)
 readonly TMP_PATH
