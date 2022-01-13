@@ -312,7 +312,6 @@ main() {
       if [[ -n $title ]]; then
         if [[ -n $tags ]]; then
           path=$TMP_PATH/"$file_base"_tags_map.yml
-          touch path
           echo -e "variables:\n tag_slugs:" >"$path"
           iterate_tags "$tags" insert_tag_slugs "$path"
         fi
