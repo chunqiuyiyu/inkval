@@ -69,6 +69,7 @@ get_config() {
   link=$(meta_grep "$INDEX_PATH" link)
   pagination=$(meta_grep "$INDEX_PATH" pagination)
   rss=$(meta_grep "$INDEX_PATH" rss)
+  startAt=$(meta_grep "$INDEX_PATH" startAt)
 }
 
 # Generate feed.xml
@@ -251,7 +252,10 @@ gen_layout() {
   local repo="https://github.com/chunqiuyiyu/inkval"
   local updated
   updated="<time>$(date)</time>"
-  echo "<footer><div>©$(date +"%Y") built with <a href=\"$repo\">Inkval</a> at $updated</div></footer>" >"$LAYOUT_PATH"/footer.html
+  if [[ -n $startAt ]]; then
+    startAt="$startAt-"
+  fi
+  echo "<footer><div>©$startAt$(date +"%Y") built with <a href=\"$repo\">Inkval</a> at $updated</div></footer>" >"$LAYOUT_PATH"/footer.html
 }
 
 # Use pandoc to render html files from markdown file
