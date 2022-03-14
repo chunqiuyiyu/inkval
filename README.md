@@ -29,7 +29,7 @@ wget -qO - https://raw.githubusercontent.com/chunqiuyiyu/inkval/main/inkval.sh |
 ```
 
 ## Tips
-You should use last release Paondoc to avoid bugs and get better experiences.
+You should use [last release Paondoc](https://github.com/jgm/pandoc/releases) to avoid bugs and get better experiences.
 
 ## License
 
