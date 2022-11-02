@@ -6,7 +6,7 @@
 
 ## Features
 
-* Only based on [Pandoc](https://pandoc.org/index.html) ang GNU core utilities
+* Only based on [Pandoc](https://pandoc.org/index.html) and GNU core utilities
 * Perfect score(100) on [Google lighthouse](https://github.com/GoogleChrome/lighthouse)
 * Easy to use and expand functions
 * Pagination support
