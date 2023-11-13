@@ -5,6 +5,12 @@ set -o errexit
 set -o pipefail
 IFS=$'\n\t'
 
+if ! command -v pandoc &> /dev/null
+then
+  echo "Pandoc could not be found, please install it first."
+  exit 1
+fi
+
 echo 'Start...'
 start=$(date +%s.%N)
 
